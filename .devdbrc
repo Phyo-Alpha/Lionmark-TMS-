@@ -1,0 +1,11 @@
+[
+  {
+    "name": "My MySQL Connection",
+    "type": "mysql",
+    "host": "localhost",
+    "port": 3309,
+    "username": "lionmarks_user",
+    "password": "lionmarks_password",
+    "database": "lionmarks_tms"
+  }
+]

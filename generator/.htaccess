@@ -1,0 +1,5 @@
+# PH pagespeed start
+<IfModule pagespeed_module>
+Modpagespeed Off
+</IfModule>
+# PH pagespeed end
