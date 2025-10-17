@@ -1,0 +1,245 @@
+<div class="px-4">
+    {# Partial block debug - rendered alone on the research results #}
+    {% block object_debug %}
+    <div id="debug-content">{{ object.debug_content|raw }}</div>
+    {% endblock object_debug %}
+    {# END Partial block - rendered alone on the research results #}
+    <div id="toolbar" class="d-lg-flex flex-wrap justify-content-between">
+        {% if object.records_count > 0 %}
+
+        <div class="d-flex ms-auto order-lg-2">
+            {{ object.select_number_per_page|raw }}
+        </div>
+
+        <hr class="w-100 d-lg-none">
+
+        {% endif %}
+        <div class="d-flex order-lg-0 mb-3">
+            {% if object.can_create == true %}
+            <a href="{{ constant('ADMIN_URL') }}{{ object.item }}/create" class="btn btn-sm me-1 btn-primary d-flex align-items-center"><i class="{{ constant('ICON_PLUS') }} prepend"></i>{{ constant('ADD_NEW') }}</a>
+            {% endif %}
+                {% if object.records_count > 0 %}
+                {{ object.export_data_button|raw }}
+                {% endif %}
+            </div>
+
+        <div class="order-lg-1 mx-lg-auto">
+            <form name="rp-search-form" id="rp-search-form" class="form-inline justify-content-center">
+                <div class="input-group input-group-sm">
+                    <button class="input-group-text btn {{ constant('DEFAULT_BUTTONS_CLASS') }} dropdown-toggle ps-4 pe-3" type="button" data-bs-toggle="dropdown" aria-expanded="false"></button>
+                    <ul id="rp-search-field" class="dropdown-menu">
+                        {% for field_name, field_display_name in object.fields %}
+                        {% set active = '' %}
+                        {% if field_name == attribute(session.rp_search_field, object.table) %}
+                        {% set active = ' active' %}
+                        {% elseif field_name == 'email' %}
+                        {% set active = ' active' %}
+                        {% endif %}
+                        <li><a class="dropdown-item{{ active }}" href="#" rel="noindex" data-value="{{ field_name }}">{{ field_display_name }}</a></li>
+                        {% endfor %}
+                    </ul>
+                    {% set search_value = '' %}
+                    {% if attribute(session.rp_search_string, object.table) is defined %}
+                    {% set search_value = attribute(session.rp_search_string, object.table) %}
+                    {% endif %}
+                    <input id="rp-search" name="rp-search" type="text" value="{{ search_value }}" placeholder="{{ constant('SEARCH') }}" class="form-control form-control-sm flex-grow-1">
+                    <button id="rp-search-submit" class="input-group-text btn {{ constant('DEFAULT_BUTTONS_CLASS') }}" data-ladda-button="true" data-style="zoom-in" type="submit"><span class="ladda-label"><i class="{{ constant('ICON_SEARCH') }}"></i></span></button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {# Partial block list - rendered alone on the research results #}
+    {% block object_list %}
+
+    {%
+        set filtered_class = {
+            id: 'id' in object.active_filtered_fields?' class="' ~ constant('ADMIN_FILTERED_COLUMNS_CLASS') ~ '"':'',
+                    firstName: 'firstName' in object.active_filtered_fields?' class="' ~ constant('ADMIN_FILTERED_COLUMNS_CLASS') ~ '"':'',
+                    lastName: 'lastName' in object.active_filtered_fields?' class="' ~ constant('ADMIN_FILTERED_COLUMNS_CLASS') ~ '"':'',
+                    email: 'email' in object.active_filtered_fields?' class="' ~ constant('ADMIN_FILTERED_COLUMNS_CLASS') ~ '"':'',
+                    countryCode: 'countryCode' in object.active_filtered_fields?' class="' ~ constant('ADMIN_FILTERED_COLUMNS_CLASS') ~ '"':'',
+                    phone: 'phone' in object.active_filtered_fields?' class="' ~ constant('ADMIN_FILTERED_COLUMNS_CLASS') ~ '"':'',
+                    dob: 'dob' in object.active_filtered_fields?' class="' ~ constant('ADMIN_FILTERED_COLUMNS_CLASS') ~ '"':'',
+                    nationality: 'nationality' in object.active_filtered_fields?' class="' ~ constant('ADMIN_FILTERED_COLUMNS_CLASS') ~ '"':'',
+                    address: 'address' in object.active_filtered_fields?' class="' ~ constant('ADMIN_FILTERED_COLUMNS_CLASS') ~ '"':'',
+                    qualification: 'qualification' in object.active_filtered_fields?' class="' ~ constant('ADMIN_FILTERED_COLUMNS_CLASS') ~ '"':'',
+                    englishCompetency: 'englishCompetency' in object.active_filtered_fields?' class="' ~ constant('ADMIN_FILTERED_COLUMNS_CLASS') ~ '"':'',
+                    vaccinated: 'vaccinated' in object.active_filtered_fields?' class="' ~ constant('ADMIN_FILTERED_COLUMNS_CLASS') ~ '"':'',
+                    workshop: 'workshop' in object.active_filtered_fields?' class="' ~ constant('ADMIN_FILTERED_COLUMNS_CLASS') ~ '"':'',
+                    classStartDate: 'classStartDate' in object.active_filtered_fields?' class="' ~ constant('ADMIN_FILTERED_COLUMNS_CLASS') ~ '"':'',
+                    salesperson: 'salesperson' in object.active_filtered_fields?' class="' ~ constant('ADMIN_FILTERED_COLUMNS_CLASS') ~ '"':'',
+                    hearAboutUs: 'hearAboutUs' in object.active_filtered_fields?' class="' ~ constant('ADMIN_FILTERED_COLUMNS_CLASS') ~ '"':'',
+                    registrationDate: 'registrationDate' in object.active_filtered_fields?' class="' ~ constant('ADMIN_FILTERED_COLUMNS_CLASS') ~ '"':'',
+                    status: 'status' in object.active_filtered_fields?' class="' ~ constant('ADMIN_FILTERED_COLUMNS_CLASS') ~ '"':'',
+                    notes: 'notes' in object.active_filtered_fields?' class="' ~ constant('ADMIN_FILTERED_COLUMNS_CLASS') ~ '"':''
+                }
+    %}
+
+    <div id="{{ object.item }}-list">
+
+        {% if object.records_count > 0 %}
+        <div class="table-data-wrapper">
+            <table class="table table-data" >
+                <thead>
+                    <tr class="{{ constant('DEFAULT_TABLE_HEADING_CLASS') }}">
+                        {% if constant('ADMIN_ACTION_BUTTONS_POSITION') == 'left' %}
+                        {% if object.can_create == true %}
+                        <th>
+                            <div class="form-check ps-1 d-flex mb-0" data-bs-toggle="tooltip" data-bs-title="{{ constant('TOGGLE_ALL') }}">
+                                <input type="checkbox" id="bulk-check-toggle" name="bulk-check-toggle" class="form-check-input">
+                                <label for="bulk-check-toggle" class="form-check-label me-0"></label>
+                            </div>
+                        </th>
+                        {% endif %}
+                            <th>{{ constant('ACTION_CONST') }}</th>
+                        {% endif %}
+                        <th>{{ object.fields.id|raw }}</th>
+                                    <th class="sorting">{{ object.fields.firstName|raw }}<a href="#" class="sorting-up py-1 d-flex align-items-start" rel="noindex" data-field="firstName" data-direction="ASC"><i class="{{ constant('ICON_ARROW_UP') }}"></i></a><a href="#" class="sorting-down py-1 d-flex align-items-end" rel="noindex" data-field="firstName" data-direction="DESC"><i class="{{ constant('ICON_ARROW_DOWN') }}"></i></a></th>
+                                    <th class="sorting">{{ object.fields.lastName|raw }}<a href="#" class="sorting-up py-1 d-flex align-items-start" rel="noindex" data-field="lastName" data-direction="ASC"><i class="{{ constant('ICON_ARROW_UP') }}"></i></a><a href="#" class="sorting-down py-1 d-flex align-items-end" rel="noindex" data-field="lastName" data-direction="DESC"><i class="{{ constant('ICON_ARROW_DOWN') }}"></i></a></th>
+                                    <th class="sorting">{{ object.fields.email|raw }}<a href="#" class="sorting-up py-1 d-flex align-items-start" rel="noindex" data-field="email" data-direction="ASC"><i class="{{ constant('ICON_ARROW_UP') }}"></i></a><a href="#" class="sorting-down py-1 d-flex align-items-end" rel="noindex" data-field="email" data-direction="DESC"><i class="{{ constant('ICON_ARROW_DOWN') }}"></i></a></th>
+                                    <th>{{ object.fields.countryCode|raw }}</th>
+                                    <th>{{ object.fields.phone|raw }}</th>
+                                    <th>{{ object.fields.dob|raw }}</th>
+                                    <th class="sorting">{{ object.fields.nationality|raw }}<a href="#" class="sorting-up py-1 d-flex align-items-start" rel="noindex" data-field="nationality" data-direction="ASC"><i class="{{ constant('ICON_ARROW_UP') }}"></i></a><a href="#" class="sorting-down py-1 d-flex align-items-end" rel="noindex" data-field="nationality" data-direction="DESC"><i class="{{ constant('ICON_ARROW_DOWN') }}"></i></a></th>
+                                    <th>{{ object.fields.address|raw }}</th>
+                                    <th>{{ object.fields.qualification|raw }}</th>
+                                    <th>{{ object.fields.englishCompetency|raw }}</th>
+                                    <th>{{ object.fields.vaccinated|raw }}</th>
+                                    <th>{{ object.fields.workshop|raw }}</th>
+                                    <th>{{ object.fields.classStartDate|raw }}</th>
+                                    <th>{{ object.fields.salesperson|raw }}</th>
+                                    <th>{{ object.fields.hearAboutUs|raw }}</th>
+                                    <th>{{ object.fields.registrationDate|raw }}</th>
+                                    <th>{{ object.fields.status|raw }}</th>
+                                    <th>{{ object.fields.notes|raw }}</th>
+                                        {% if constant('ADMIN_ACTION_BUTTONS_POSITION') == 'right' %}
+                        <th>{{ constant('ACTION_CONST') }}</th>
+                            {% if object.can_create == true %}
+                        <th>
+                            <div class="form-check ps-1 d-flex mb-0" data-bs-toggle="tooltip" data-bs-title="{{ constant('TOGGLE_ALL') }}">
+                                <input type="checkbox" id="bulk-check-toggle" name="bulk-check-toggle" class="form-check-input">
+                                <label for="bulk-check-toggle" class="form-check-label me-0"></label>
+                            </div>
+                        </th>
+                            {% endif %}
+                                {% endif %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for i in range(0, object.records_count - 1) %}
+                    <tr>
+                        {% if constant('ADMIN_ACTION_BUTTONS_POSITION') == 'left' %}
+                        {% if object.can_create == true %}
+                        <td>
+                            <div class="form-check ps-0 pt-1 d-flex mb-0">
+                                <input type="checkbox" id="bulk-check-{{ object.pk_url_params[loop.index0] }}" name="bulk-check-{{ object.pk_url_params[loop.index0] }}" class="form-check-input bulk-check" data-id="{{ object.pk_url_params[loop.index0] }}">
+                                <label for="bulk-check-{{ object.pk_url_params[loop.index0] }}" class="form-check-label me-0"></label>
+                            </div>
+                        </td>
+                        {% endif %}
+                            <td class="has-btn-group no-ellipsis">
+                            <div class="btn-group">
+                                <a href="#" class="btn btn-sm btn-primary btn-view-record" data-target="{{ object.item }}/view/{{ object.pk_url_params[loop.index0] }}" data-bs-toggle="tooltip" data-bs-title="{{ constant('VIEW_DETAIL') }}"><span class="{{ constant('ICON_VIEW') }} icon-md"></span></a>
+                                    {% if object.update_record_authorized[object.pk_concat_values[loop.index0]] == true %}
+                                <a href="{{ constant('ADMIN_URL') }}{{ object.item }}/edit/{{ object.pk_url_params[loop.index0] }}" class="btn btn-sm btn-warning" data-bs-toggle="tooltip" data-bs-title="{{ constant('EDIT') }}"><span class="{{ constant('ICON_EDIT') }} icon-md"></span></a>
+                                {% endif %}
+                                {% if object.can_create == true %}
+                                <a href="{{ constant('ADMIN_URL') }}{{ object.item }}/delete/{{ object.pk_url_params[loop.index0] }}" class="btn btn-sm btn-danger" data-bs-toggle="tooltip" data-bs-title="{{ constant('DELETE_CONST') }}"><span class="{{ constant('ICON_DELETE') }} icon-md"></span></a>
+                                {% endif %}
+                            </div>
+                        </td>
+                        {% endif %}
+                        <td{{ filtered_class.id|raw }}>{{ object.id[ loop.index0 ]|replace({'[|]': ' '}) }}</td>
+                                    <td{{ filtered_class.firstName|raw }}>{{ object.firstName[ loop.index0 ]|replace({'[|]': ' '}) }}</td>
+                                    <td{{ filtered_class.lastName|raw }}>{{ object.lastName[ loop.index0 ]|replace({'[|]': ' '}) }}</td>
+                                    <td{{ filtered_class.email|raw }}>{{ object.email[ loop.index0 ]|replace({'[|]': ' '}) }}</td>
+                                    <td{{ filtered_class.countryCode|raw }}>{{ object.countryCode[ loop.index0 ]|replace({'[|]': ' '}) }}</td>
+                                    <td{{ filtered_class.phone|raw }}>{{ object.phone[ loop.index0 ]|replace({'[|]': ' '}) }}</td>
+                                    <td{{ filtered_class.dob|raw }}>{{ toDate(object.dob[ loop.index0 ], 'dd MMMM yyyy')|raw }}</td>
+                                    <td{{ filtered_class.nationality|raw }}>{{ object.nationality[ loop.index0 ]|replace({'[|]': ' '}) }}</td>
+                                    <td{{ filtered_class.address|raw }}>{{ object.address[ loop.index0 ]|replace({'[|]': ' '}) }}</td>
+                                    <td{{ filtered_class.qualification|raw }}>{{ object.qualification[ loop.index0 ]|replace({'[|]': ' '}) }}</td>
+                                    <td{{ filtered_class.englishCompetency|raw }}>{{ object.englishCompetency[ loop.index0 ]|replace({'[|]': ' '}) }}</td>
+                                    <td{{ filtered_class.vaccinated|raw }}>{{ object.vaccinated[ loop.index0 ]|replace({'[|]': ' '}) }}</td>
+                                    <td{{ filtered_class.workshop|raw }}>{{ object.workshop[ loop.index0 ]|replace({'[|]': ' '}) }}</td>
+                                    <td{{ filtered_class.classStartDate|raw }}>{{ toDate(object.classStartDate[ loop.index0 ], 'dd MMMM yyyy')|raw }}</td>
+                                    <td{{ filtered_class.salesperson|raw }}>{{ object.salesperson[ loop.index0 ]|replace({'[|]': ' '}) }}</td>
+                                    <td{{ filtered_class.hearAboutUs|raw }}>{{ object.hearAboutUs[ loop.index0 ]|replace({'[|]': ' '}) }}</td>
+                                    <td{{ filtered_class.registrationDate|raw }}>{{ toDate(object.registrationDate[ loop.index0 ], 'dd MMMM yyyy H:m a')|raw }}</td>
+                                    <td{{ filtered_class.status|raw }}>{{ object.status[ loop.index0 ]|replace({'[|]': ' '}) }}</td>
+                                    <td{{ filtered_class.notes|raw }}>{{ object.notes[ loop.index0 ]|replace({'[|]': ' '}) }}</td>
+                                    {% if constant('ADMIN_ACTION_BUTTONS_POSITION') == 'right' %}
+                        <td class="has-btn-group no-ellipsis">
+                            <div class="btn-group">
+                                <a href="#" class="btn btn-sm btn-primary btn-view-record" data-target="{{ object.item }}/view/{{ object.pk_url_params[loop.index0] }}" data-bs-toggle="tooltip" data-bs-title="{{ constant('VIEW_DETAIL') }}"><span class="{{ constant('ICON_VIEW') }} icon-md"></span></a>
+                                    {% if object.update_record_authorized[object.pk_concat_values[loop.index0]] == true %}
+                                <a href="{{ constant('ADMIN_URL') }}{{ object.item }}/edit/{{ object.pk_url_params[loop.index0] }}" class="btn btn-sm btn-warning" data-bs-toggle="tooltip" data-bs-title="{{ constant('EDIT') }}" data-delay="500"><span class="{{ constant('ICON_EDIT') }} icon-md"></span></a>
+                                {% endif %}
+                                {% if object.can_create == true %}
+                                <a href="{{ constant('ADMIN_URL') }}{{ object.item }}/delete/{{ object.pk_url_params[loop.index0] }}" class="btn btn-sm btn-danger" data-bs-toggle="tooltip" data-bs-title="{{ constant('DELETE_CONST') }}" data-delay="500"><span class="{{ constant('ICON_DELETE') }} icon-md"></span></a>
+                                {% endif %}
+                            </div>
+                        </td>
+                        {% if object.can_create == true %}
+                        <td>
+                            <div class="form-check ps-0 pt-1 d-flex mb-0">
+                                <input type="checkbox" id="bulk-check-{{ object.pk_url_params[loop.index0] }}" name="bulk-check-{{ object.pk_url_params[loop.index0] }}" class="form-check-input bulk-check" data-id="{{ object.pk_url_params[loop.index0] }}">
+                                <label for="bulk-check-{{ object.pk_url_params[loop.index0] }}" class="form-check-label me-0"></label>
+                            </div>
+                        </td>
+                        {% endif %}
+                            {% endif %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                {% if object.can_create == true %}
+                <tfoot>
+                    <tr>
+                        {% set delete_btn_class = '' %}
+                        {% if constant('ADMIN_ACTION_BUTTONS_POSITION') == 'right' %}
+                        {% set delete_btn_class = 'text-end' %}
+                        {% endif %}
+                        <td colspan="21" class="{{ delete_btn_class }}">
+                            <button type="button" id="bulk-delete-btn" class="btn btn-danger"><span class="{{ constant('ICON_DELETE') }} icon-md prepend"></span> {{ constant('DELETE_SELECTED_RECORDS') }}</button>
+                        </td>
+                    </tr>
+                </tfoot>
+                {% endif %}
+                </table>
+        </div> <!-- END table-responsive -->
+
+        {% else %}
+        <p class="text-semibold">
+            {{ alert(constant('NO_RECORD_FOUND'), 'alert-info has-icon')|raw }}
+        </p>
+        {% endif %}
+
+        <div id="pagination-wrapper" class="d-flex justify-content-between p-4">
+            {{ object.pagination_html|raw }}
+        </div>
+    </div> <!-- END {{ object.item }}-list -->
+
+    {% endblock object_list %}
+    {# END Partial block - rendered alone on the research results #}
+
+</div> <!-- END card -->
+{% if object.records_count > 0 and object.can_create == true %}
+<!-- Bulk delete modal -->
+<div id="bulk-delete-modal" class="modal" tabindex="-1" aria-hidden="true">
+    <div class="modal-content">
+        <div class="modal-header text-bg-primary">
+            <h6 class="modal-title mb-0">{{ constant('DELETE_SELECTED_RECORDS') }}</h6>
+        </div>
+
+        <div class="modal-body">
+            <p>{{ constant('DELETE_SELECTED_RECORDS') }}? (<span id="records-count"></span> {{ constant('RECORDS') }})</p>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-light modal-close"><i class="{{ constant('ICON_CANCEL') }} prepend"></i> {{ constant('CANCEL') }}</button>
+            <button type="button" id="bulk-delete-confirm-btn" class="btn btn-primary">{{ constant('YES') }} <i class="{{ constant('ICON_CHECKMARK') }} append"></i></button>
+        </div>
+    </div>
+</div>
+{% endif %}
+    

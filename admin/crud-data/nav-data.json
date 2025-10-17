@@ -1,1 +1,1 @@
-[{"name":"Dashboard","tables":["category","courses","learners","trainers","users","phpcg_users_profiles","phpcg_users"],"is_disabled":["false","false","false","false","false","false","false"]}]
+[{"name":"Dashboard","tables":["category","courses","learners","trainers","users","phpcg_users_profiles","phpcg_users","workshop_registrations"],"is_disabled":["false","false","false","false","false","false","false",false]}]
