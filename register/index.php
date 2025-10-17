@@ -4,13 +4,18 @@ session_start();
 // Include database config if needed
 // include_once '../conf/conf.php';
 
-// Load PHPMailer from bundled location
 require_once __DIR__ . '/../class/phpformbuilder/mailer/phpmailer/src/Exception.php';
 require_once __DIR__ . '/../class/phpformbuilder/mailer/phpmailer/src/PHPMailer.php';
 require_once __DIR__ . '/../class/phpformbuilder/mailer/phpmailer/src/SMTP.php';
+require_once __DIR__ . '/../conf/conf.php';
 
-use PHPMailer\PHPMailer\PHPMailer;
-use PHPMailer\PHPMailer\Exception;
+require_once __DIR__ . '/../class/phpformbuilder/Validator/Validator.php';
+require_once __DIR__ . '/../class/phpformbuilder/Validator/Exception.php';
+require_once __DIR__ . '/../model/WorkShop-Registeration.php';
+require_once __DIR__ . '/mail/mail.php';
+
+
+use phpformbuilder\Validator\Validator;
 
 $page_title = 'Workshop Registration Form';
 $success_message = '';
@@ -18,233 +23,60 @@ $errors = [];
 
 // Process form submission
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    // Validate required fields
-    if (empty($_POST['firstName'])) {
-        $errors[] = "First Name is required";
-    }
-    if (empty($_POST['lastName'])) {
-        $errors[] = "Last Name is required";
-    }
-    if (empty($_POST['email'])) {
-        $errors[] = "Email is required";
-    } elseif (!filter_var($_POST['email'], FILTER_VALIDATE_EMAIL)) {
-        $errors[] = "Invalid email format";
-    }
-    if (empty($_POST['phone'])) {
-        $errors[] = "Phone Number is required";
-    }
-    if (empty($_POST['dob'])) {
-        $errors[] = "Date of Birth is required";
-    }
-    if (empty($_POST['nationality'])) {
-        $errors[] = "Nationality is required";
-    }
-    if (empty($_POST['address'])) {
-        $errors[] = "Home Address is required";
-    }
+    // Initialize validator with POST data
+    $validator = new Validator($_POST);
 
-    // If no errors, process the form
-    if (empty($errors)) {
-        $dbSave = saveToDatabase($_POST);
+    // Validate required fields with chaining
+    $validator->required()->validate('firstName');
+    $validator->required()->validate('lastName');
+    $validator->email()->required()->validate('email');
+    $validator->required()->validate('phone');
+    $validator->required()->validate('countryCode');
+    $validator->required()->validate('dob');
+    $validator->required()->validate('nationality');
+    $validator->required()->validate('address');
 
-        if ($dbSave) {
-            error_log("Hello There !");
+    // Check if validation passed
+    if ($validator->hasErrors()) {
+        // Get all validation errors
+        $validation_errors = $validator->getAllErrors();
+        foreach ($validation_errors as $field => $error_messages) {
+            if (is_array($error_messages)) {
+                foreach ($error_messages as $error) {
+                    $errors[] = $error;
+                }
+            } else {
+                $errors[] = $error_messages;
+            }
+        }
+    } else {
+        // Validation passed, process the form using ORM model
+        $registration = new WorkShopRegistration();
+        $registration->fill($_POST);
+
+        $insertedId = $registration->save();
+
+        if ($insertedId !== false) {
+            error_log("Saved to database successfully with ID: " . $insertedId);
+
+            // Send confirmation email
             $emailSent = sendConfirmationEmail($_POST);
 
             if ($emailSent) {
                 $success_message = true;
-
                 // Clear POST data on success
                 $_POST = [];
             } else {
                 $errors[] = "Registration saved but email failed to send. We will contact you shortly.";
             }
         } else {
+            error_log("Failed to save registration");
             $errors[] = "Failed to save registration. Please try again or contact support.";
         }
     }
 }
 
-function saveToDatabase($data): bool
-{
 
-    error_log("Saving to database");
-    $servername = "127.0.0.1";
-    $port = 3309;
-    $username = "lionmarks_user";
-    $password = "lionmarks_password";
-    $dbname = "lionmarks_tms";
-
-
-    $conn = new mysqli($servername, $username, $password, $dbname, $port);
-
-
-    if ($conn->connect_error) {
-        die("Connection failed: " . $conn->connect_error);
-    }
-
-    $sql = "INSERT INTO workshop_registrations (firstName, lastName, email, countryCode, phone, dob, nationality, address, qualification, englishCompetency, vaccinated, workshop, classStartDate, salesperson, hearAboutUs) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-    $stmt = $conn->prepare($sql);
-
-    if (!$stmt) {
-        error_log("Prepare failed: " . $conn->error);
-        $conn->close();
-        return false;
-    }
-
-    $stmt->bind_param(
-        "sssssssssssssss",
-        $data['firstName'],
-        $data['lastName'],
-        $data['email'],
-        $data['countryCode'],
-        $data['phone'],
-        $data['dob'],
-        $data['nationality'],
-        $data['address'],
-        $data['qualification'],
-        $data['englishCompetency'],
-        $data['vaccinated'],
-        $data['workshop'],
-        $data['classStartDate'],
-        $data['salesperson'],
-        $data['hearAboutUs']
-    );
-
-    if (!$stmt->execute()) {
-        error_log("Execute failed: " . $stmt->error);
-        $stmt->close();
-        $conn->close();
-        return false;
-    }
-
-    $stmt->close();
-    $conn->close();
-
-    error_log("Saved to database successfully");
-    return true;
-}
-
-// Function to send confirmation email
-function sendConfirmationEmail($data)
-{
-    $mail = new PHPMailer(true);
-    error_log("Sending confirmation email to " . $data['email'] . " with subject " . 'Workshop Registration Confirmation - Lionmarks Training');
-
-    // Set up debug logging to file
-    $debugLogFile = __DIR__ . '/logs/phpmailer_debug.log';
-
-    // Create logs directory if it doesn't exist
-    if (!file_exists(__DIR__ . '/logs')) {
-        mkdir(__DIR__ . '/logs', 0755, true);
-    }
-
-    try {
-        // Server settings
-        $mail->isSMTP();
-        $mail->Host       = 'smtp.hostinger.com';
-        $mail->SMTPAuth   = true;
-        $mail->Username   = 'admin@lionmark.com.sg';
-        $mail->Password   = 'Lionmarka20222!';
-        $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS;
-        $mail->Port       = 465;
-
-        // Enable debug output but save to file instead of displaying
-        $mail->SMTPDebug = 2; // Enable verbose debug output
-        $mail->Debugoutput = function ($str, $level) use ($debugLogFile) {
-            file_put_contents($debugLogFile, date('Y-m-d H:i:s') . " [Level $level]: $str\n", FILE_APPEND);
-        };
-
-        // Timeout settings to prevent hanging
-        $mail->Timeout = 30;
-        $mail->SMTPKeepAlive = false;
-
-        // Character encoding
-        $mail->CharSet = 'UTF-8';
-        $mail->Encoding = 'base64';
-
-        // Recipients
-        $mail->setFrom(address: 'admin@lionmark.com.sg', name: 'Lionmarks Training');
-        $mail->addAddress(address: $data['email'], name: $data['firstName'] . ' ' . $data['lastName']);
-        $mail->addReplyTo(address: 'admin@lionmark.com.sg', name: 'Lionmarks Training');
-
-        // Content
-        $mail->isHTML(isHtml: true);
-        $mail->Subject = 'Workshop Registration Confirmation - Lionmarks Training';
-
-        // HTML Body
-        $mail->Body = "
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset='UTF-8'>
-    <style>
-        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-        .header { background-color: #1e3a8a; color: white; padding: 30px; text-align: center; }
-        .content { background: #f9f9f9; padding: 30px; }
-        .info-row { margin: 10px 0; padding: 10px; background: white; }
-        .label { font-weight: bold; color: #1e3a8a; }
-        .footer { text-align: center; margin-top: 30px; padding: 20px; color: #666; font-size: 12px; }
-        .note { margin-top: 30px; padding: 20px; background: #fff3cd; border-left: 4px solid #ffc107; }
-    </style>
-</head>
-<body>
-    <div class='container'>
-        <div class='header'>
-            <h1>Registration Confirmed!</h1>
-            <p>Thank you for registering with Lionmarks Training</p>
-        </div>
-        <div class='content'>
-            <h2>Registration Details</h2>
-            <div class='info-row'><span class='label'>Name:</span> " . htmlspecialchars($data['firstName'] . ' ' . $data['lastName']) . "</div>
-            <div class='info-row'><span class='label'>Email:</span> " . htmlspecialchars($data['email']) . "</div>
-            <div class='info-row'><span class='label'>Phone:</span> " . htmlspecialchars($data['countryCode'] . ' ' . $data['phone']) . "</div>
-            <div class='info-row'><span class='label'>Workshop:</span> " . htmlspecialchars($data['workshop'] ?? 'Not selected') . "</div>
-
-            <div class='note'>
-                <strong>Important Note:</strong><br>
-                We will contact you regarding a $30 refundable deposit.<br>
-                This deposit will be returned upon course completion.
-            </div>
-        </div>
-        <div class='footer'>
-            <p>&copy; 2025 Lionmarks Training. All rights reserved.</p>
-        </div>
-    </div>
-</body>
-</html>";
-
-        // Plain text alternative for email clients that don't support HTML
-        $mail->AltBody = "Registration Confirmed!\n\n"
-            . "Thank you for registering with Lionmarks Training\n\n"
-            . "Registration Details:\n"
-            . "Name: " . $data['firstName'] . ' ' . $data['lastName'] . "\n"
-            . "Email: " . $data['email'] . "\n"
-            . "Phone: " . $data['countryCode'] . ' ' . $data['phone'] . "\n"
-            . "Workshop: " . ($data['workshop'] ?? 'Not selected') . "\n\n"
-            . "Important Note:\n"
-            . "We will contact you regarding a $30 refundable deposit.\n"
-            . "This deposit will be returned upon course completion.\n\n"
-            . "(c) 2025 Lionmarks Training. All rights reserved.";
-
-        $mail->send();
-        error_log("Email sent successfully to " . $data['email']);
-
-        // Log success to debug file as well
-        file_put_contents($debugLogFile, date('Y-m-d H:i:s') . " [SUCCESS]: Email sent to " . $data['email'] . "\n", FILE_APPEND);
-
-        return true;
-    } catch (Exception $e) {
-        $errorMsg = "Email Error: " . $e->getMessage() . " | SMTP Error: " . $mail->ErrorInfo;
-        error_log($errorMsg);
-
-        // Log error to debug file as well
-        file_put_contents($debugLogFile, date('Y-m-d H:i:s') . " [ERROR]: " . $errorMsg . "\n", FILE_APPEND);
-
-        return false;
-    }
-}
 
 // Preserve form values
 function old($field, $default = '')
@@ -260,6 +92,10 @@ function old($field, $default = '')
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?php echo $page_title; ?></title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/register/assets/css/register.css">
 </head>
 
@@ -316,7 +152,7 @@ function old($field, $default = '')
                         </div>
 
                         <!-- Email -->
-                        <div>
+                        <div class="row">
                             <div class="col-md-6">
                                 <label for="email" class="form-label required">Email</label>
                                 <input type="email" class="form-control" id="email" name="email" value="<?php echo old('email'); ?>" required>
@@ -346,168 +182,169 @@ function old($field, $default = '')
                                     </div>
                                 </div>
                             </div>
+                        </div>
 
-                            <!-- Date of Birth and Nationality -->
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <label for="dob" class="form-label required">Date of Birth</label>
-                                    <input type="date" class="form-control" id="dob" name="dob" value="<?php echo old('dob'); ?>" required>
-                                </div>
-                                <div class="col-md-6">
-                                    <label for="nationality" class="form-label required">Nationality</label>
-                                    <select class="form-select" id="nationality" name="nationality" required>
-                                        <option value="">Select Nationality</option>
-                                        <option value="Singaporean" <?php echo old('nationality') == 'Singaporean' ? 'selected' : ''; ?>>Singaporean</option>
-                                        <option value="PR" <?php echo old('nationality') == 'PR' ? 'selected' : ''; ?>>PR</option>
-                                        <option value="Others" <?php echo old('nationality') == 'Others' ? 'selected' : ''; ?>>Others</option>
-                                    </select>
-                                </div>
+                        <!-- Date of Birth and Nationality -->
+                        <div class="row">
+                            <div class="col-md-6">
+                                <label for="dob" class="form-label required">Date of Birth</label>
+                                <input type="date" class="form-control" id="dob" name="dob" value="<?php echo old('dob'); ?>" required>
                             </div>
-
-                            <!-- Home Address -->
-                            <div class="row">
-                                <div class="col-md-12">
-                                    <label for="address" class="form-label required">Home Address</label>
-                                    <input type="text" class="form-control" id="address" name="address" value="<?php echo old('address'); ?>" required>
-                                </div>
+                            <div class="col-md-6">
+                                <label for="nationality" class="form-label required">Nationality</label>
+                                <select class="form-select" id="nationality" name="nationality" required>
+                                    <option value="">Select Nationality</option>
+                                    <option value="Singaporean" <?php echo old('nationality') == 'Singaporean' ? 'selected' : ''; ?>>Singaporean</option>
+                                    <option value="PR" <?php echo old('nationality') == 'PR' ? 'selected' : ''; ?>>PR</option>
+                                    <option value="Others" <?php echo old('nationality') == 'Others' ? 'selected' : ''; ?>>Others</option>
+                                </select>
                             </div>
+                        </div>
 
-                            <!-- Qualification and English Competency -->
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <label for="qualification" class="form-label">Highest Qualification</label>
-                                    <select class="form-select" id="qualification" name="qualification">
-                                        <option value="Primary" <?php echo old('qualification', 'Primary') == 'Primary' ? 'selected' : ''; ?>>Primary</option>
-                                        <option value="Secondary" <?php echo old('qualification') == 'Secondary' ? 'selected' : ''; ?>>Secondary</option>
-                                        <option value="Diploma/A-Levels" <?php echo old('qualification') == 'Diploma/A-Levels' ? 'selected' : ''; ?>>Diploma/A-Levels</option>
-                                        <option value="Degree" <?php echo old('qualification') == 'Degree' ? 'selected' : ''; ?>>Degree</option>
-                                        <option value="Masters" <?php echo old('qualification') == 'Masters' ? 'selected' : ''; ?>>Masters</option>
-                                        <option value="PHD" <?php echo old('qualification') == 'PHD' ? 'selected' : ''; ?>>PHD</option>
-                                        <option value="Others" <?php echo old('qualification') == 'Others' ? 'selected' : ''; ?>>Others</option>
-                                    </select>
-                                </div>
-                                <div class="col-md-6">
-                                    <label for="englishCompetency" class="form-label">English Competency</label>
-                                    <select class="form-select" id="englishCompetency" name="englishCompetency">
-                                        <option value="Competent" <?php echo old('englishCompetency', 'Competent') == 'Competent' ? 'selected' : ''; ?>>Competent</option>
-                                        <option value="Not competent" <?php echo old('englishCompetency') == 'Not competent' ? 'selected' : ''; ?>>Not competent</option>
-                                    </select>
-                                </div>
+                        <!-- Home Address -->
+                        <div class="row">
+                            <div class="col-md-12">
+                                <label for="address" class="form-label required">Home Address</label>
+                                <input type="text" class="form-control" id="address" name="address" value="<?php echo old('address'); ?>" required>
                             </div>
+                        </div>
 
-                            <!-- Vaccination Status -->
-                            <div class="row">
-                                <div class="col-md-12">
-                                    <label class="form-label">Fully vaccinated?</label>
-                                    <div class="radio-group">
-                                        <div class="form-check">
-                                            <input class="form-check-input" type="radio" name="vaccinated" id="vaccinated-yes" value="Yes" <?php echo old('vaccinated') == 'Yes' ? 'checked' : ''; ?>>
-                                            <label class="form-check-label" for="vaccinated-yes">Yes</label>
-                                        </div>
-                                        <div class="form-check">
-                                            <input class="form-check-input" type="radio" name="vaccinated" id="vaccinated-no" value="No" <?php echo old('vaccinated') == 'No' ? 'checked' : ''; ?>>
-                                            <label class="form-check-label" for="vaccinated-no">No</label>
-                                        </div>
+                        <!-- Qualification and English Competency -->
+                        <div class="row">
+                            <div class="col-md-6">
+                                <label for="qualification" class="form-label">Highest Qualification</label>
+                                <select class="form-select" id="qualification" name="qualification">
+                                    <option value="Primary" <?php echo old('qualification', 'Primary') == 'Primary' ? 'selected' : ''; ?>>Primary</option>
+                                    <option value="Secondary" <?php echo old('qualification') == 'Secondary' ? 'selected' : ''; ?>>Secondary</option>
+                                    <option value="Diploma/A-Levels" <?php echo old('qualification') == 'Diploma/A-Levels' ? 'selected' : ''; ?>>Diploma/A-Levels</option>
+                                    <option value="Degree" <?php echo old('qualification') == 'Degree' ? 'selected' : ''; ?>>Degree</option>
+                                    <option value="Masters" <?php echo old('qualification') == 'Masters' ? 'selected' : ''; ?>>Masters</option>
+                                    <option value="PHD" <?php echo old('qualification') == 'PHD' ? 'selected' : ''; ?>>PHD</option>
+                                    <option value="Others" <?php echo old('qualification') == 'Others' ? 'selected' : ''; ?>>Others</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="englishCompetency" class="form-label">English Competency</label>
+                                <select class="form-select" id="englishCompetency" name="englishCompetency">
+                                    <option value="Competent" <?php echo old('englishCompetency', 'Competent') == 'Competent' ? 'selected' : ''; ?>>Competent</option>
+                                    <option value="Not competent" <?php echo old('englishCompetency') == 'Not competent' ? 'selected' : ''; ?>>Not competent</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Vaccination Status -->
+                        <div class="row">
+                            <div class="col-md-12">
+                                <label class="form-label">Fully vaccinated?</label>
+                                <div class="radio-group">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="vaccinated" id="vaccinated-yes" value="Yes" <?php echo old('vaccinated') == 'Yes' ? 'checked' : ''; ?>>
+                                        <label class="form-check-label" for="vaccinated-yes">Yes</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="vaccinated" id="vaccinated-no" value="No" <?php echo old('vaccinated') == 'No' ? 'checked' : ''; ?>>
+                                        <label class="form-check-label" for="vaccinated-no">No</label>
                                     </div>
                                 </div>
                             </div>
+                        </div>
 
-                            <!-- Workshop Selection -->
-                            <div class="row">
-                                <div class="col-md-12">
-                                    <label for="workshop" class="form-label">Choose Workshop</label>
-                                    <select class="form-select" id="workshop" name="workshop">
-                                        <option value="">Choose an option</option>
-                                        <option value="TikTok Social Media Marketing" <?php echo old('workshop') == 'TikTok Social Media Marketing' ? 'selected' : ''; ?>>TikTok Social Media Marketing</option>
-                                        <option value="Visual Content Essentials" <?php echo old('workshop') == 'Visual Content Essentials' ? 'selected' : ''; ?>>Visual Content Essentials</option>
-                                        <option value="Videography & Editing" <?php echo old('workshop') == 'Videography & Editing' ? 'selected' : ''; ?>>Videography & Editing</option>
-                                        <option value="Mobile Photography" <?php echo old('workshop') == 'Mobile Photography' ? 'selected' : ''; ?>>Mobile Photography</option>
-                                        <option value="AI-Driven Graphic Design" <?php echo old('workshop') == 'AI-Driven Graphic Design' ? 'selected' : ''; ?>>AI-Driven Graphic Design</option>
-                                        <option value="Acrylic Painting (Colour Concept)" <?php echo old('workshop') == 'Acrylic Painting (Colour Concept)' ? 'selected' : ''; ?>>Acrylic Painting (Colour Concept)</option>
-                                        <option value="Sketching and Watercolour Painting" <?php echo old('workshop') == 'Sketching and Watercolour Painting' ? 'selected' : ''; ?>>Sketching and Watercolour Painting</option>
-                                        <option value="Digital Art with Procreate" <?php echo old('workshop') == 'Digital Art with Procreate' ? 'selected' : ''; ?>>Digital Art with Procreate</option>
-                                        <option value="Canva for Social Media" <?php echo old('workshop') == 'Canva for Social Media' ? 'selected' : ''; ?>>Canva for Social Media</option>
-                                        <option value="DJ Sound Mixing" <?php echo old('workshop') == 'DJ Sound Mixing' ? 'selected' : ''; ?>>DJ Sound Mixing</option>
-                                        <option value="Peranakan Cuisine" <?php echo old('workshop') == 'Peranakan Cuisine' ? 'selected' : ''; ?>>Peranakan Cuisine</option>
-                                        <option value="Japanese Cuisine" <?php echo old('workshop') == 'Japanese Cuisine' ? 'selected' : ''; ?>>Japanese Cuisine</option>
-                                        <option value="Delicious Bento" <?php echo old('workshop') == 'Delicious Bento' ? 'selected' : ''; ?>>Delicious Bento</option>
-                                        <option value="Dim Sum" <?php echo old('workshop') == 'Dim Sum' ? 'selected' : ''; ?>>Dim Sum</option>
-                                        <option value="Hawker Delights" <?php echo old('workshop') == 'Hawker Delights' ? 'selected' : ''; ?>>Hawker Delights</option>
-                                        <option value="Korean Delights" <?php echo old('workshop') == 'Korean Delights' ? 'selected' : ''; ?>>Korean Delights</option>
-                                        <option value="Thai Cuisine" <?php echo old('workshop') == 'Thai Cuisine' ? 'selected' : ''; ?>>Thai Cuisine</option>
-                                        <option value="Plant Based Delights" <?php echo old('workshop') == 'Plant Based Delights' ? 'selected' : ''; ?>>Plant Based Delights</option>
-                                        <option value="Artisan Candle Design" <?php echo old('workshop') == 'Artisan Candle Design' ? 'selected' : ''; ?>>Artisan Candle Design</option>
-                                        <option value="Artisan Cosmetic Material Design" <?php echo old('workshop') == 'Artisan Cosmetic Material Design' ? 'selected' : ''; ?>>Artisan Cosmetic Material Design</option>
-                                        <option value="Perfumery Product Design" <?php echo old('workshop') == 'Perfumery Product Design' ? 'selected' : ''; ?>>Perfumery Product Design</option>
-                                        <option value="Artisanal Soap Making Craft" <?php echo old('workshop') == 'Artisanal Soap Making Craft' ? 'selected' : ''; ?>>Artisanal Soap Making Craft</option>
-                                        <option value="Specialty Perfumery Craft" <?php echo old('workshop') == 'Specialty Perfumery Craft' ? 'selected' : ''; ?>>Specialty Perfumery Craft</option>
-                                    </select>
-                                </div>
+                        <!-- Workshop Selection -->
+                        <div class="row">
+                            <div class="col-md-12">
+                                <label for="workshop" class="form-label">Choose Workshop</label>
+                                <select class="form-select" id="workshop" name="workshop">
+                                    <option value="">Choose an option</option>
+                                    <option value="TikTok Social Media Marketing" <?php echo old('workshop') == 'TikTok Social Media Marketing' ? 'selected' : ''; ?>>TikTok Social Media Marketing</option>
+                                    <option value="Visual Content Essentials" <?php echo old('workshop') == 'Visual Content Essentials' ? 'selected' : ''; ?>>Visual Content Essentials</option>
+                                    <option value="Videography & Editing" <?php echo old('workshop') == 'Videography & Editing' ? 'selected' : ''; ?>>Videography & Editing</option>
+                                    <option value="Mobile Photography" <?php echo old('workshop') == 'Mobile Photography' ? 'selected' : ''; ?>>Mobile Photography</option>
+                                    <option value="AI-Driven Graphic Design" <?php echo old('workshop') == 'AI-Driven Graphic Design' ? 'selected' : ''; ?>>AI-Driven Graphic Design</option>
+                                    <option value="Acrylic Painting (Colour Concept)" <?php echo old('workshop') == 'Acrylic Painting (Colour Concept)' ? 'selected' : ''; ?>>Acrylic Painting (Colour Concept)</option>
+                                    <option value="Sketching and Watercolour Painting" <?php echo old('workshop') == 'Sketching and Watercolour Painting' ? 'selected' : ''; ?>>Sketching and Watercolour Painting</option>
+                                    <option value="Digital Art with Procreate" <?php echo old('workshop') == 'Digital Art with Procreate' ? 'selected' : ''; ?>>Digital Art with Procreate</option>
+                                    <option value="Canva for Social Media" <?php echo old('workshop') == 'Canva for Social Media' ? 'selected' : ''; ?>>Canva for Social Media</option>
+                                    <option value="DJ Sound Mixing" <?php echo old('workshop') == 'DJ Sound Mixing' ? 'selected' : ''; ?>>DJ Sound Mixing</option>
+                                    <option value="Peranakan Cuisine" <?php echo old('workshop') == 'Peranakan Cuisine' ? 'selected' : ''; ?>>Peranakan Cuisine</option>
+                                    <option value="Japanese Cuisine" <?php echo old('workshop') == 'Japanese Cuisine' ? 'selected' : ''; ?>>Japanese Cuisine</option>
+                                    <option value="Delicious Bento" <?php echo old('workshop') == 'Delicious Bento' ? 'selected' : ''; ?>>Delicious Bento</option>
+                                    <option value="Dim Sum" <?php echo old('workshop') == 'Dim Sum' ? 'selected' : ''; ?>>Dim Sum</option>
+                                    <option value="Hawker Delights" <?php echo old('workshop') == 'Hawker Delights' ? 'selected' : ''; ?>>Hawker Delights</option>
+                                    <option value="Korean Delights" <?php echo old('workshop') == 'Korean Delights' ? 'selected' : ''; ?>>Korean Delights</option>
+                                    <option value="Thai Cuisine" <?php echo old('workshop') == 'Thai Cuisine' ? 'selected' : ''; ?>>Thai Cuisine</option>
+                                    <option value="Plant Based Delights" <?php echo old('workshop') == 'Plant Based Delights' ? 'selected' : ''; ?>>Plant Based Delights</option>
+                                    <option value="Artisan Candle Design" <?php echo old('workshop') == 'Artisan Candle Design' ? 'selected' : ''; ?>>Artisan Candle Design</option>
+                                    <option value="Artisan Cosmetic Material Design" <?php echo old('workshop') == 'Artisan Cosmetic Material Design' ? 'selected' : ''; ?>>Artisan Cosmetic Material Design</option>
+                                    <option value="Perfumery Product Design" <?php echo old('workshop') == 'Perfumery Product Design' ? 'selected' : ''; ?>>Perfumery Product Design</option>
+                                    <option value="Artisanal Soap Making Craft" <?php echo old('workshop') == 'Artisanal Soap Making Craft' ? 'selected' : ''; ?>>Artisanal Soap Making Craft</option>
+                                    <option value="Specialty Perfumery Craft" <?php echo old('workshop') == 'Specialty Perfumery Craft' ? 'selected' : ''; ?>>Specialty Perfumery Craft</option>
+                                </select>
                             </div>
+                        </div>
 
-                            <!-- Class Start Date and Salesperson -->
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <label for="classStartDate" class="form-label">Class Start Date</label>
-                                    <input type="date" class="form-control" id="classStartDate" name="classStartDate" value="<?php echo old('classStartDate'); ?>">
-                                </div>
-                                <div class="col-md-6">
-                                    <label for="salesperson" class="form-label">Salesperson's name (if applicable)</label>
-                                    <input type="text" class="form-control" id="salesperson" name="salesperson" value="<?php echo old('salesperson'); ?>">
-                                </div>
+                        <!-- Class Start Date and Salesperson -->
+                        <div class="row">
+                            <div class="col-md-6">
+                                <label for="classStartDate" class="form-label">Class Start Date</label>
+                                <input type="date" class="form-control" id="classStartDate" name="classStartDate" value="<?php echo old('classStartDate'); ?>">
                             </div>
+                            <div class="col-md-6">
+                                <label for="salesperson" class="form-label">Salesperson's name (if applicable)</label>
+                                <input type="text" class="form-control" id="salesperson" name="salesperson" value="<?php echo old('salesperson'); ?>">
+                            </div>
+                        </div>
 
-                            <!-- How did you hear about us -->
-                            <div class="row">
-                                <div class="col-md-12">
-                                    <label class="form-label">How did you hear about us?</label>
-                                    <div class="radio-group">
-                                        <div class="form-check">
-                                            <input class="form-check-input" type="radio" name="hearAboutUs" id="hearAboutUs-google" value="Google Search" <?php echo old('hearAboutUs') == 'Google Search' ? 'checked' : ''; ?>>
-                                            <label class="form-check-label" for="hearAboutUs-google">Google Search</label>
-                                        </div>
-                                        <div class="form-check">
-                                            <input class="form-check-input" type="radio" name="hearAboutUs" id="hearAboutUs-instagram" value="Instagram" <?php echo old('hearAboutUs') == 'Instagram' ? 'checked' : ''; ?>>
-                                            <label class="form-check-label" for="hearAboutUs-instagram">Instagram</label>
-                                        </div>
-                                        <div class="form-check">
-                                            <input class="form-check-input" type="radio" name="hearAboutUs" id="hearAboutUs-facebook" value="Facebook" <?php echo old('hearAboutUs') == 'Facebook' ? 'checked' : ''; ?>>
-                                            <label class="form-check-label" for="hearAboutUs-facebook">Facebook</label>
-                                        </div>
-                                        <div class="form-check">
-                                            <input class="form-check-input" type="radio" name="hearAboutUs" id="hearAboutUs-friends" value="Friends" <?php echo old('hearAboutUs') == 'Friends' ? 'checked' : ''; ?>>
-                                            <label class="form-check-label" for="hearAboutUs-friends">Friends</label>
-                                        </div>
-                                        <div class="form-check">
-                                            <input class="form-check-input" type="radio" name="hearAboutUs" id="hearAboutUs-booth" value="Sales Booth" <?php echo old('hearAboutUs') == 'Sales Booth' ? 'checked' : ''; ?>>
-                                            <label class="form-check-label" for="hearAboutUs-booth">Sales Booth</label>
-                                        </div>
-                                        <div class="form-check">
-                                            <input class="form-check-input" type="radio" name="hearAboutUs" id="hearAboutUs-others" value="Others" <?php echo old('hearAboutUs') == 'Others' ? 'checked' : ''; ?>>
-                                            <label class="form-check-label" for="hearAboutUs-others">Others</label>
-                                        </div>
+                        <!-- How did you hear about us -->
+                        <div class="row">
+                            <div class="col-md-12">
+                                <label class="form-label">How did you hear about us?</label>
+                                <div class="radio-group">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="hearAboutUs" id="hearAboutUs-google" value="Google Search" <?php echo old('hearAboutUs') == 'Google Search' ? 'checked' : ''; ?>>
+                                        <label class="form-check-label" for="hearAboutUs-google">Google Search</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="hearAboutUs" id="hearAboutUs-instagram" value="Instagram" <?php echo old('hearAboutUs') == 'Instagram' ? 'checked' : ''; ?>>
+                                        <label class="form-check-label" for="hearAboutUs-instagram">Instagram</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="hearAboutUs" id="hearAboutUs-facebook" value="Facebook" <?php echo old('hearAboutUs') == 'Facebook' ? 'checked' : ''; ?>>
+                                        <label class="form-check-label" for="hearAboutUs-facebook">Facebook</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="hearAboutUs" id="hearAboutUs-friends" value="Friends" <?php echo old('hearAboutUs') == 'Friends' ? 'checked' : ''; ?>>
+                                        <label class="form-check-label" for="hearAboutUs-friends">Friends</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="hearAboutUs" id="hearAboutUs-booth" value="Sales Booth" <?php echo old('hearAboutUs') == 'Sales Booth' ? 'checked' : ''; ?>>
+                                        <label class="form-check-label" for="hearAboutUs-booth">Sales Booth</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="hearAboutUs" id="hearAboutUs-others" value="Others" <?php echo old('hearAboutUs') == 'Others' ? 'checked' : ''; ?>>
+                                        <label class="form-check-label" for="hearAboutUs-others">Others</label>
                                     </div>
                                 </div>
                             </div>
+                        </div>
 
-                            <!-- Note -->
-                            <div class="alert alert-info">
-                                <strong>*Note:</strong><br>
-                                We will contact you regarding a $30 refundable deposit.<br>
-                                This deposit will be returned upon course completion.
-                            </div>
+                        <!-- Note -->
+                        <div class="alert alert-info">
+                            <strong>*Note:</strong><br>
+                            We will contact you regarding a $30 refundable deposit.<br>
+                            This deposit will be returned upon course completion.
+                        </div>
 
-                            <!-- Submit Button -->
-                            <div class="d-grid mt-4">
-                                <button type="submit" class="btn btn-primary">
-                                    Submit Registration <i class="fas fa-paper-plane ms-2"></i>
-                                </button>
-                            </div>
+                        <!-- Submit Button -->
+                        <div class="d-grid mt-4">
+                            <button type="submit" class="btn btn-primary">
+                                Submit Registration <i class="fas fa-paper-plane ms-2"></i>
+                            </button>
+                        </div>
                     </form>
                 <?php endif; ?>
+
             </div>
         </div>
-    </div>
 </body>
 
 </html>

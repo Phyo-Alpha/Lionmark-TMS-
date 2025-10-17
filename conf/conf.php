@@ -198,6 +198,10 @@ define('ICON_ZIP_CODE', 'fas fa-location-arrow');
 
 include_once CLASS_DIR . 'phpformbuilder/database/db-connect.php';
 
+/* email configuration */
+
+include_once ROOT . 'conf/email-conf.php';
+
 /* =============================================
     USER CONFIG
 ============================================= */
